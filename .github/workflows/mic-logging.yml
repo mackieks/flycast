@@ -1,0 +1,55 @@
+name: Windows microphone logging
+
+on:
+  push:
+    branches:
+      - 'codex/mic-logging'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Windows x64 with full logging
+    runs-on: windows-2022
+
+    defaults:
+      run:
+        shell: 'msys2 {0}'
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: git make mingw-w64-x86_64-ccache mingw-w64-x86_64-cmake mingw-w64-x86_64-lua mingw-w64-x86_64-ninja mingw-w64-x86_64-SDL2 mingw-w64-x86_64-toolchain mingw-w64-x86_64-libcdio
+
+      - uses: actions/cache@v5
+        with:
+          path: .ccache
+          key: mic-logging-windows-${{ github.sha }}
+          restore-keys: mic-logging-windows-
+
+      - name: Build optimized executable with DEBUG logging
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=artifact -DENABLE_LOG=ON -DUSE_DISCORD=ON -DUSE_LIBCDIO=ON
+          cmake --build build --target install
+
+      - name: Include microphone logging instructions
+        run: |
+          cp MIC_LOGGING.md artifact/bin/
+          git rev-parse HEAD > artifact/bin/BUILD_COMMIT.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flycast-windows-x64-mic-logging
+          path: artifact/bin/
+          if-no-files-found: error
